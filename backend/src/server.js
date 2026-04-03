@@ -6,9 +6,13 @@ import {
   getActivities,
   getHazards,
   getMappings,
+  getRiskAssessments,
+  getUsers,
   saveActivities,
   saveHazards,
-  saveMappings
+  saveMappings,
+  saveRiskAssessments,
+  saveUsers
 } from './dataStore.js';
 
 const app = express();
@@ -20,16 +24,111 @@ const frontendDist = path.resolve(__dirname, '../../frontend/dist');
 app.use(cors());
 app.use(express.json());
 
+const makeId = (prefix) => `${prefix}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+const createToken = (userId) => Buffer.from(userId).toString('base64');
+const parseToken = (token) => {
+  try {
+    return Buffer.from(token, 'base64').toString('utf-8');
+  } catch {
+    return null;
+  }
+};
+
+const sanitizeUser = (user) => {
+  const { password, ...safeUser } = user;
+  return safeUser;
+};
+
+const authRequired = async (req, res, next) => {
+  const authHeader = req.headers.authorization || '';
+  if (!authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ message: 'Unauthorized.' });
+  }
+
+  const token = authHeader.replace('Bearer ', '');
+  const userId = parseToken(token);
+  if (!userId) {
+    return res.status(401).json({ message: 'Invalid token.' });
+  }
+
+  const users = await getUsers();
+  const user = users.find((item) => item.id === userId);
+  if (!user) {
+    return res.status(401).json({ message: 'User not found.' });
+  }
+
+  req.user = user;
+  return next();
+};
+
+const adminRequired = (req, res, next) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Admin access required.' });
+  }
+
+  return next();
+};
+
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
+
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ message: 'Email and password are required.' });
+  }
+
+  const users = await getUsers();
+  const user = users.find(
+    (item) => item.email.toLowerCase() === String(email).toLowerCase() && item.password === password
+  );
+
+  if (!user) {
+    return res.status(401).json({ message: 'Invalid credentials.' });
+  }
+
+  return res.json({ token: createToken(user.id), user: sanitizeUser(user) });
+});
+
+app.get('/api/auth/me', authRequired, async (req, res) => {
+  return res.json(sanitizeUser(req.user));
+});
+
+app.get('/api/users', authRequired, adminRequired, async (req, res) => {
+  const users = await getUsers();
+  const sameCompanyUsers = users
+    .filter((item) => item.companyId === req.user.companyId)
+    .map(sanitizeUser);
+  return res.json(sameCompanyUsers);
+});
+
+app.put('/api/users/:userId/department-access', authRequired, adminRequired, async (req, res) => {
+  const { userId } = req.params;
+  const { allowedDepartmentIds } = req.body;
+
+  if (!Array.isArray(allowedDepartmentIds)) {
+    return res.status(400).json({ message: 'allowedDepartmentIds must be an array.' });
+  }
+
+  const users = await getUsers();
+  const targetUser = users.find((item) => item.id === userId && item.companyId === req.user.companyId);
+
+  if (!targetUser) {
+    return res.status(404).json({ message: 'User not found in your company.' });
+  }
+
+  targetUser.allowedDepartmentIds = [...new Set(allowedDepartmentIds)];
+  await saveUsers(users);
+  return res.json(sanitizeUser(targetUser));
+});
+
+app.use('/api', authRequired);
 
 app.get('/api/activities', async (_req, res) => {
   const activities = await getActivities();
   res.json(activities);
 });
-
-const makeId = (prefix) => `${prefix}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 
 app.post('/api/activities', async (req, res) => {
   const { name } = req.body;
@@ -302,6 +401,45 @@ app.get('/api/ra-template', async (req, res) => {
     subActivity,
     rows: hazardsForRa
   });
+});
+
+app.get('/api/risk-assessments', async (req, res) => {
+  const assessments = await getRiskAssessments();
+  const visible = assessments.filter(
+    (item) =>
+      item.companyId === req.user.companyId && req.user.allowedDepartmentIds.includes(item.departmentId)
+  );
+
+  return res.json(visible);
+});
+
+app.post('/api/risk-assessments', async (req, res) => {
+  const { title, activityId, activityName, subActivities } = req.body;
+
+  if (!title || !Array.isArray(subActivities) || subActivities.length === 0) {
+    return res.status(400).json({ message: 'title and subActivities are required.' });
+  }
+
+  const assessment = {
+    id: makeId('ra'),
+    companyId: req.user.companyId,
+    companyName: req.user.companyName,
+    departmentId: req.user.departmentId,
+    departmentName: req.user.departmentName,
+    createdBy: req.user.id,
+    createdByName: req.user.name,
+    createdAt: new Date().toISOString(),
+    title: String(title).trim(),
+    activityId,
+    activityName,
+    subActivities
+  };
+
+  const assessments = await getRiskAssessments();
+  assessments.push(assessment);
+  await saveRiskAssessments(assessments);
+
+  return res.status(201).json(assessment);
 });
 
 app.use(express.static(frontendDist));

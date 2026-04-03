@@ -22,6 +22,19 @@ header h1 {
   margin: 0 0 0.8rem;
 }
 
+.top-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 1rem;
+}
+
+.muted-text {
+  color: #6b7280;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
 nav {
   display: flex;
   flex-wrap: wrap;
@@ -61,6 +74,17 @@ nav {
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   padding: 0.75rem;
+}
+
+.login-card {
+  max-width: 420px;
+  margin: 2rem auto;
+}
+
+.stack-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
 }
 
 .inline-fields {
@@ -191,6 +215,16 @@ td {
   background: #fff;
   border-radius: 999px;
   padding: 0.25rem 0.5rem;
+}
+
+.chip-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.inactive-chip {
+  opacity: 0.4;
 }
 
 .error-text {

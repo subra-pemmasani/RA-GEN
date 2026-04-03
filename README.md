@@ -17,6 +17,7 @@ A beginner-friendly full-stack web application to convert an Excel-based risk as
 
 ## Core workflow implemented
 - Select activity and sub-activity
+- Select multiple sub-activities in RA Generator
 - Create new activities and sub-activities
 - Edit existing activities and sub-activities
 - Load mapped hazards automatically
@@ -27,6 +28,19 @@ A beginner-friendly full-stack web application to convert an Excel-based risk as
 - Enter residual likelihood/severity
 - Auto-calculate residual RPN
 - Print to A4-friendly layout
+
+## Multi-company user controls (V1.1)
+- Login system with role-based users (admin/user)
+- Company and department context per user
+- Risk Register with department-based visibility
+- Admin page to grant cross-department visibility within the same company
+
+### Demo users
+- `admin@alpha.com` / `admin123`
+- `ops@alpha.com` / `user123`
+- `maint@alpha.com` / `user123`
+- `admin@beta.com` / `admin123`
+- `transport@beta.com` / `user123`
 
 ## Run locally
 ```bash

@@ -20,6 +20,11 @@ const writeJson = async (filename, data) => {
 export const getActivities = async () => readJson('activities.json');
 export const getHazards = async () => readJson('hazards.json');
 export const getMappings = async () => readJson('activityHazardMappings.json');
+export const getUsers = async () => readJson('users.json');
+export const getRiskAssessments = async () => readJson('riskAssessments.json');
 export const saveActivities = async (activities) => writeJson('activities.json', activities);
 export const saveHazards = async (hazards) => writeJson('hazards.json', hazards);
 export const saveMappings = async (mappings) => writeJson('activityHazardMappings.json', mappings);
+export const saveUsers = async (users) => writeJson('users.json', users);
+export const saveRiskAssessments = async (riskAssessments) =>
+  writeJson('riskAssessments.json', riskAssessments);
