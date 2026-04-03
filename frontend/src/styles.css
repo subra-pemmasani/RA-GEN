@@ -1,0 +1,155 @@
+:root {
+  font-family: Arial, sans-serif;
+  color: #1f2937;
+  background: #f3f4f6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.app-shell {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+header h1 {
+  margin: 0 0 0.8rem;
+}
+
+nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.nav-link {
+  text-decoration: none;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  color: #111827;
+  background: #e5e7eb;
+  font-size: 0.9rem;
+}
+
+.nav-link.active {
+  background: #1d4ed8;
+  color: #fff;
+}
+
+.card,
+.print-sheet {
+  background: #fff;
+  border-radius: 12px;
+  padding: 1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.75rem;
+}
+
+.tile {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+.inline-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.9rem;
+}
+
+select,
+input,
+textarea,
+button {
+  font: inherit;
+}
+
+input,
+select,
+textarea {
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 0.45rem 0.5rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  border: 1px solid #d1d5db;
+  padding: 0.5rem;
+  vertical-align: top;
+  font-size: 0.85rem;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.btn {
+  margin-top: 1rem;
+  background: #1d4ed8;
+  color: #fff;
+  border: 0;
+  border-radius: 8px;
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+}
+
+.error-text {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.print-header p {
+  margin: 0.2rem 0;
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+
+  nav,
+  header,
+  .print-hide {
+    display: none;
+  }
+
+  .print-sheet {
+    width: 210mm;
+    min-height: 297mm;
+    padding: 10mm;
+    box-shadow: none;
+    border-radius: 0;
+  }
+
+  .print-table th,
+  .print-table td {
+    font-size: 10px;
+    padding: 4px;
+  }
+}
