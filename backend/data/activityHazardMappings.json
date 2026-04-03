@@ -1,0 +1,11 @@
+[
+  { "id": "map-001", "activityId": "act-001", "subActivityId": "sub-001", "hazardId": "haz-001" },
+  { "id": "map-002", "activityId": "act-001", "subActivityId": "sub-001", "hazardId": "haz-002" },
+  { "id": "map-003", "activityId": "act-001", "subActivityId": "sub-002", "hazardId": "haz-001" },
+  { "id": "map-004", "activityId": "act-001", "subActivityId": "sub-002", "hazardId": "haz-005" },
+  { "id": "map-005", "activityId": "act-002", "subActivityId": "sub-003", "hazardId": "haz-003" },
+  { "id": "map-006", "activityId": "act-002", "subActivityId": "sub-004", "hazardId": "haz-003" },
+  { "id": "map-007", "activityId": "act-003", "subActivityId": "sub-005", "hazardId": "haz-004" },
+  { "id": "map-008", "activityId": "act-003", "subActivityId": "sub-006", "hazardId": "haz-004" },
+  { "id": "map-009", "activityId": "act-003", "subActivityId": "sub-006", "hazardId": "haz-005" }
+]
