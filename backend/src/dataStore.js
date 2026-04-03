@@ -12,6 +12,12 @@ const readJson = async (filename) => {
   return JSON.parse(raw);
 };
 
+const writeJson = async (filename, data) => {
+  const fullPath = path.join(dataDir, filename);
+  await fs.writeFile(fullPath, JSON.stringify(data, null, 2));
+};
+
 export const getActivities = async () => readJson('activities.json');
 export const getHazards = async () => readJson('hazards.json');
 export const getMappings = async () => readJson('activityHazardMappings.json');
+export const saveActivities = async (activities) => writeJson('activities.json', activities);

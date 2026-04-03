@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getActivities, getHazards, getMappings } from './dataStore.js';
+import { getActivities, getHazards, getMappings, saveActivities } from './dataStore.js';
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -20,6 +20,52 @@ app.get('/api/health', (_req, res) => {
 app.get('/api/activities', async (_req, res) => {
   const activities = await getActivities();
   res.json(activities);
+});
+
+const makeId = (prefix) => `${prefix}-${Date.now()}`;
+
+app.post('/api/activities', async (req, res) => {
+  const { name } = req.body;
+
+  if (!name || !String(name).trim()) {
+    return res.status(400).json({ message: 'Activity name is required.' });
+  }
+
+  const activities = await getActivities();
+  const newActivity = {
+    id: makeId('act'),
+    name: String(name).trim(),
+    subActivities: []
+  };
+
+  activities.push(newActivity);
+  await saveActivities(activities);
+  return res.status(201).json(newActivity);
+});
+
+app.post('/api/activities/:activityId/sub-activities', async (req, res) => {
+  const { activityId } = req.params;
+  const { name } = req.body;
+
+  if (!name || !String(name).trim()) {
+    return res.status(400).json({ message: 'Sub-activity name is required.' });
+  }
+
+  const activities = await getActivities();
+  const activity = activities.find((item) => item.id === activityId);
+
+  if (!activity) {
+    return res.status(404).json({ message: 'Activity not found.' });
+  }
+
+  const newSubActivity = {
+    id: makeId('sub'),
+    name: String(name).trim()
+  };
+
+  activity.subActivities.push(newSubActivity);
+  await saveActivities(activities);
+  return res.status(201).json(newSubActivity);
 });
 
 app.get('/api/hazards', async (_req, res) => {

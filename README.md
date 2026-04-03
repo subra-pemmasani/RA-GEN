@@ -17,6 +17,7 @@ A beginner-friendly full-stack web application to convert an Excel-based risk as
 
 ## Core workflow implemented
 - Select activity and sub-activity
+- Create new activities and sub-activities
 - Load mapped hazards automatically
 - Show description, consequences, existing controls
 - Enter likelihood/severity (1-5)
