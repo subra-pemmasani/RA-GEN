@@ -1,0 +1,62 @@
+[
+  {
+    "id": "usr-admin-alpha",
+    "companyId": "comp-001",
+    "companyName": "Alpha Engineering",
+    "departmentId": "dept-001",
+    "departmentName": "Operations",
+    "name": "Alice Admin",
+    "email": "admin@alpha.com",
+    "password": "admin123",
+    "role": "admin",
+    "allowedDepartmentIds": ["dept-001", "dept-002"]
+  },
+  {
+    "id": "usr-user-alpha-ops",
+    "companyId": "comp-001",
+    "companyName": "Alpha Engineering",
+    "departmentId": "dept-001",
+    "departmentName": "Operations",
+    "name": "Oscar Ops",
+    "email": "ops@alpha.com",
+    "password": "user123",
+    "role": "user",
+    "allowedDepartmentIds": ["dept-001"]
+  },
+  {
+    "id": "usr-user-alpha-maint",
+    "companyId": "comp-001",
+    "companyName": "Alpha Engineering",
+    "departmentId": "dept-002",
+    "departmentName": "Maintenance",
+    "name": "Mia Maintenance",
+    "email": "maint@alpha.com",
+    "password": "user123",
+    "role": "user",
+    "allowedDepartmentIds": ["dept-002"]
+  },
+  {
+    "id": "usr-admin-beta",
+    "companyId": "comp-002",
+    "companyName": "Beta Logistics",
+    "departmentId": "dept-003",
+    "departmentName": "Warehouse",
+    "name": "Ben Beta",
+    "email": "admin@beta.com",
+    "password": "admin123",
+    "role": "admin",
+    "allowedDepartmentIds": ["dept-003", "dept-004"]
+  },
+  {
+    "id": "usr-user-beta",
+    "companyId": "comp-002",
+    "companyName": "Beta Logistics",
+    "departmentId": "dept-004",
+    "departmentName": "Transport",
+    "name": "Tina Transport",
+    "email": "transport@beta.com",
+    "password": "user123",
+    "role": "user",
+    "allowedDepartmentIds": ["dept-004"]
+  }
+]
