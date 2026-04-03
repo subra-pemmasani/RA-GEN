@@ -1,0 +1,37 @@
+[
+  {
+    "id": "haz-001",
+    "name": "Fall from height",
+    "description": "Worker may fall from ladder or roof edge due to unstable access.",
+    "consequences": "Major injury, fatality, fractures",
+    "existingControls": "Use certified ladder, pre-use inspection, spotter present"
+  },
+  {
+    "id": "haz-002",
+    "name": "Dropped object",
+    "description": "Tools or materials may fall from elevated location.",
+    "consequences": "Head injury, lacerations, equipment damage",
+    "existingControls": "Toe boards, tool lanyards, exclusion zone"
+  },
+  {
+    "id": "haz-003",
+    "name": "Musculoskeletal strain",
+    "description": "Improper lifting posture during repetitive manual handling.",
+    "consequences": "Back injury, lost-time incidents",
+    "existingControls": "Manual handling training, team lift, trolley use"
+  },
+  {
+    "id": "haz-004",
+    "name": "Electric shock",
+    "description": "Contact with live conductors during panel work.",
+    "consequences": "Burns, cardiac arrest, fatality",
+    "existingControls": "Lockout/Tagout, insulated gloves, voltage tester"
+  },
+  {
+    "id": "haz-005",
+    "name": "Slip or trip",
+    "description": "Uneven surfaces and loose cables in work area.",
+    "consequences": "Sprains, bruises, minor to moderate injuries",
+    "existingControls": "Housekeeping checks, anti-slip footwear"
+  }
+]
