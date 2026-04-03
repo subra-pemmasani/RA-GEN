@@ -21,3 +21,5 @@ export const getActivities = async () => readJson('activities.json');
 export const getHazards = async () => readJson('hazards.json');
 export const getMappings = async () => readJson('activityHazardMappings.json');
 export const saveActivities = async (activities) => writeJson('activities.json', activities);
+export const saveHazards = async (hazards) => writeJson('hazards.json', hazards);
+export const saveMappings = async (mappings) => writeJson('activityHazardMappings.json', mappings);

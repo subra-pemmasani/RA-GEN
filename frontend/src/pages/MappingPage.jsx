@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 
 export default function MappingPage() {
   const [activities, setActivities] = useState([]);
   const [hazards, setHazards] = useState([]);
   const [mappings, setMappings] = useState([]);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     Promise.all([api.getActivities(), api.getHazards(), api.getMappings()]).then(
@@ -16,42 +17,95 @@ export default function MappingPage() {
     );
   }, []);
 
-  const resolveLabel = (mapping) => {
-    const activity = activities.find((a) => a.id === mapping.activityId);
-    const subActivity = activity?.subActivities.find((s) => s.id === mapping.subActivityId);
-    const hazard = hazards.find((h) => h.id === mapping.hazardId);
+  const hazardsBySubActivity = useMemo(() => {
+    const grouped = {};
+    mappings.forEach((mapping) => {
+      const key = `${mapping.activityId}::${mapping.subActivityId}`;
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(mapping.hazardId);
+    });
+    return grouped;
+  }, [mappings]);
 
-    return {
-      activity: activity?.name || mapping.activityId,
-      subActivity: subActivity?.name || mapping.subActivityId,
-      hazard: hazard?.name || mapping.hazardId
-    };
+  const saveHazardsForSubActivity = async (activityId, subActivityId, hazardIds) => {
+    setError('');
+    try {
+      await api.updateSubActivityHazards(activityId, subActivityId, hazardIds);
+      const refreshed = await api.getMappings();
+      setMappings(refreshed);
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  };
+
+  const removeHazard = (activityId, subActivityId, hazardIdToRemove) => {
+    const key = `${activityId}::${subActivityId}`;
+    const nextHazards = (hazardsBySubActivity[key] || []).filter((hazardId) => hazardId !== hazardIdToRemove);
+    saveHazardsForSubActivity(activityId, subActivityId, nextHazards);
+  };
+
+  const addHazard = (activityId, subActivityId, hazardIdToAdd) => {
+    if (!hazardIdToAdd) return;
+    const key = `${activityId}::${subActivityId}`;
+    const existing = hazardsBySubActivity[key] || [];
+    const nextHazards = existing.includes(hazardIdToAdd) ? existing : [...existing, hazardIdToAdd];
+    saveHazardsForSubActivity(activityId, subActivityId, nextHazards);
   };
 
   return (
     <section className="card">
       <h2>Activity-Hazard Mapping</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Activity</th>
-            <th>Sub-activity</th>
-            <th>Hazard</th>
-          </tr>
-        </thead>
-        <tbody>
-          {mappings.map((mapping) => {
-            const row = resolveLabel(mapping);
-            return (
-              <tr key={mapping.id}>
-                <td>{row.activity}</td>
-                <td>{row.subActivity}</td>
-                <td>{row.hazard}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      {error ? <p className="error-text">{error}</p> : null}
+
+      {activities.map((activity) => (
+        <article key={activity.id} className="tile">
+          <h3>{activity.name}</h3>
+          <div className="mapping-stack">
+            {activity.subActivities.map((subActivity) => {
+              const key = `${activity.id}::${subActivity.id}`;
+              const selectedHazards = hazardsBySubActivity[key] || [];
+              const availableHazards = hazards.filter((hazard) => !selectedHazards.includes(hazard.id));
+
+              return (
+                <div key={subActivity.id} className="mapping-row">
+                  <div className="mapping-subactivity">{subActivity.name}</div>
+                  <div className="mapping-hazards-cell">
+                    {selectedHazards.map((hazardId) => {
+                      const hazard = hazards.find((item) => item.id === hazardId);
+                      if (!hazard) return null;
+
+                      return (
+                        <button
+                          key={hazardId}
+                          type="button"
+                          className="hazard-chip"
+                          onClick={() => removeHazard(activity.id, subActivity.id, hazardId)}
+                          title="Click to remove"
+                        >
+                          {hazard.name} ✕
+                        </button>
+                      );
+                    })}
+
+                    <select
+                      className="plus-chip"
+                      value=""
+                      onChange={(event) => addHazard(activity.id, subActivity.id, event.target.value)}
+                    >
+                      <option value="">+ Add Hazard</option>
+                      {availableHazards.map((hazard) => (
+                        <option key={hazard.id} value={hazard.id}>
+                          {hazard.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </article>
+      ))}
     </section>
   );
 }

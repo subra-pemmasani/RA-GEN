@@ -7,6 +7,13 @@ export default function ActivityLibraryPage() {
   const [newSubActivityName, setNewSubActivityName] = useState('');
   const [selectedActivityId, setSelectedActivityId] = useState('');
   const [error, setError] = useState('');
+  const [editingActivityId, setEditingActivityId] = useState('');
+  const [editingActivityName, setEditingActivityName] = useState('');
+  const [editingSubActivity, setEditingSubActivity] = useState({
+    activityId: '',
+    subActivityId: '',
+    name: ''
+  });
 
   useEffect(() => {
     api.getActivities().then((data) => {
@@ -49,6 +56,65 @@ export default function ActivityLibraryPage() {
         })
       );
       setNewSubActivityName('');
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  };
+
+  const startActivityEdit = (activity) => {
+    setEditingActivityId(activity.id);
+    setEditingActivityName(activity.name);
+  };
+
+  const handleActivityEditSave = async (event) => {
+    event.preventDefault();
+    if (!editingActivityId) return;
+    setError('');
+
+    try {
+      const updated = await api.updateActivity(editingActivityId, editingActivityName);
+      setActivities((prev) =>
+        prev.map((activity) => (activity.id === editingActivityId ? { ...activity, ...updated } : activity))
+      );
+      setEditingActivityId('');
+      setEditingActivityName('');
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  };
+
+  const startSubActivityEdit = (activityId, subActivity) => {
+    setEditingSubActivity({
+      activityId,
+      subActivityId: subActivity.id,
+      name: subActivity.name
+    });
+  };
+
+  const handleSubActivityEditSave = async (event) => {
+    event.preventDefault();
+    if (!editingSubActivity.activityId || !editingSubActivity.subActivityId) return;
+    setError('');
+
+    try {
+      const updated = await api.updateSubActivity(
+        editingSubActivity.activityId,
+        editingSubActivity.subActivityId,
+        editingSubActivity.name
+      );
+
+      setActivities((prev) =>
+        prev.map((activity) => {
+          if (activity.id !== editingSubActivity.activityId) return activity;
+          return {
+            ...activity,
+            subActivities: activity.subActivities.map((sub) =>
+              sub.id === editingSubActivity.subActivityId ? { ...sub, ...updated } : sub
+            )
+          };
+        })
+      );
+      setEditingSubActivity({ activityId: '', subActivityId: '', name: '' });
     } catch (requestError) {
       setError(requestError.message);
     }
@@ -105,10 +171,65 @@ export default function ActivityLibraryPage() {
 
       {activities.map((activity) => (
         <article key={activity.id} className="tile">
-          <h3>{activity.name}</h3>
+          {editingActivityId === activity.id ? (
+            <form onSubmit={handleActivityEditSave} className="inline-form">
+              <input
+                value={editingActivityName}
+                onChange={(event) => setEditingActivityName(event.target.value)}
+              />
+              <button type="submit" className="btn small-btn">Save</button>
+              <button
+                type="button"
+                className="btn small-btn secondary-btn"
+                onClick={() => {
+                  setEditingActivityId('');
+                  setEditingActivityName('');
+                }}
+              >
+                Cancel
+              </button>
+            </form>
+          ) : (
+            <div className="row-between">
+              <h3>{activity.name}</h3>
+              <button type="button" className="btn small-btn secondary-btn" onClick={() => startActivityEdit(activity)}>
+                Edit
+              </button>
+            </div>
+          )}
           <ul>
             {activity.subActivities.map((sub) => (
-              <li key={sub.id}>{sub.name}</li>
+              <li key={sub.id} className="row-between">
+                {editingSubActivity.subActivityId === sub.id ? (
+                  <form onSubmit={handleSubActivityEditSave} className="inline-form">
+                    <input
+                      value={editingSubActivity.name}
+                      onChange={(event) =>
+                        setEditingSubActivity((prev) => ({ ...prev, name: event.target.value }))
+                      }
+                    />
+                    <button type="submit" className="btn small-btn">Save</button>
+                    <button
+                      type="button"
+                      className="btn small-btn secondary-btn"
+                      onClick={() => setEditingSubActivity({ activityId: '', subActivityId: '', name: '' })}
+                    >
+                      Cancel
+                    </button>
+                  </form>
+                ) : (
+                  <>
+                    <span>{sub.name}</span>
+                    <button
+                      type="button"
+                      className="btn small-btn secondary-btn"
+                      onClick={() => startSubActivityEdit(activity.id, sub)}
+                    >
+                      Edit
+                    </button>
+                  </>
+                )}
+              </li>
             ))}
           </ul>
         </article>
