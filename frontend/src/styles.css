@@ -1,0 +1,295 @@
+:root {
+  font-family: Inter, 'Segoe UI', Roboto, Arial, sans-serif;
+  color: #0f172a;
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+.app-shell {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 1.25rem;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 1.6rem;
+}
+
+.top-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 1rem 1.1rem;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(8px);
+  border: 1px solid #e2e8f0;
+}
+
+.muted-text {
+  color: #64748b;
+  margin: 0.2rem 0 0;
+  font-size: 0.88rem;
+}
+
+nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-bottom: 1rem;
+}
+
+.nav-link {
+  text-decoration: none;
+  padding: 0.5rem 0.75rem;
+  border-radius: 10px;
+  color: #0f172a;
+  background: #e2e8f0;
+  font-size: 0.88rem;
+  border: 1px solid transparent;
+}
+
+.nav-link.active {
+  background: #0f172a;
+  color: #fff;
+}
+
+.card,
+.print-sheet {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 1rem;
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.06);
+  border: 1px solid #e2e8f0;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.8rem;
+}
+
+.tile {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 0.8rem;
+  background: #f8fafc;
+}
+
+.login-card {
+  max-width: 420px;
+  margin: 4rem auto;
+}
+
+.stack-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.inline-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.88rem;
+}
+
+select,
+input,
+textarea,
+button {
+  font: inherit;
+}
+
+input,
+select,
+textarea {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0.5rem 0.55rem;
+  background: #fff;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  border: 1px solid #e2e8f0;
+  padding: 0.55rem;
+  vertical-align: top;
+  font-size: 0.82rem;
+}
+
+th {
+  background: #f1f5f9;
+  text-align: left;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.btn {
+  margin-top: 1rem;
+  background: #2563eb;
+  color: #fff;
+  border: 0;
+  border-radius: 10px;
+  padding: 0.55rem 1rem;
+  cursor: pointer;
+  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.25);
+}
+
+.small-btn {
+  margin-top: 0;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.8rem;
+  box-shadow: none;
+}
+
+.secondary-btn {
+  background: #475569;
+}
+
+.row-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.inline-form {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+}
+
+.inline-form input {
+  flex: 1;
+}
+
+.mapping-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.mapping-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) 1fr;
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.mapping-subactivity {
+  font-weight: 600;
+  padding: 0.4rem 0;
+}
+
+.mapping-hazards-cell {
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  min-height: 52px;
+  padding: 0.4rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  background: #fff;
+}
+
+.hazard-chip {
+  border: 0;
+  background: #dbeafe;
+  color: #1e3a8a;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.plus-chip {
+  border: 1px dashed #1d4ed8;
+  color: #1d4ed8;
+  background: #fff;
+  border-radius: 999px;
+  padding: 0.25rem 0.5rem;
+}
+
+.chip-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.inactive-chip {
+  opacity: 0.35;
+}
+
+.error-text {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .mapping-row {
+    grid-template-columns: 1fr;
+  }
+
+  .top-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+.print-header p {
+  margin: 0.2rem 0;
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+
+  nav,
+  header,
+  .print-hide {
+    display: none;
+  }
+
+  .print-sheet {
+    width: 210mm;
+    min-height: 297mm;
+    padding: 10mm;
+    box-shadow: none;
+    border-radius: 0;
+    border: 0;
+  }
+
+  .print-table th,
+  .print-table td {
+    font-size: 10px;
+    padding: 4px;
+  }
+}
