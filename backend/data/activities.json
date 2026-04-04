@@ -1,0 +1,26 @@
+[
+  {
+    "id": "act-001",
+    "name": "Working at Height",
+    "subActivities": [
+      { "id": "sub-001", "name": "Ladder Inspection" },
+      { "id": "sub-002", "name": "Roof Access" }
+    ]
+  },
+  {
+    "id": "act-002",
+    "name": "Manual Handling",
+    "subActivities": [
+      { "id": "sub-003", "name": "Lifting Boxes" },
+      { "id": "sub-004", "name": "Moving Equipment" }
+    ]
+  },
+  {
+    "id": "act-003",
+    "name": "Electrical Maintenance",
+    "subActivities": [
+      { "id": "sub-005", "name": "Panel Inspection" },
+      { "id": "sub-006", "name": "Cable Replacement" }
+    ]
+  }
+]
