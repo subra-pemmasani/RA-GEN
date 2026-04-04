@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT NOT NULL UNIQUE,
   password TEXT NOT NULL,
   role TEXT NOT NULL,
-  allowed_department_ids TEXT NOT NULL
+  allowed_department_ids TEXT NOT NULL,
+  permissions TEXT NOT NULL DEFAULT '{}'
 );
 
 CREATE TABLE IF NOT EXISTS activities (
@@ -104,7 +105,7 @@ const seedIfEmpty = () => {
   const hazards = JSON.parse(fs.readFileSync(path.join(dataDir, 'hazards.json'), 'utf-8'));
   const mappings = JSON.parse(fs.readFileSync(path.join(dataDir, 'activityHazardMappings.json'), 'utf-8'));
 
-  const insertUser = db.prepare(`INSERT INTO users VALUES (@id,@company_id,@company_name,@department_id,@department_name,@name,@email,@password,@role,@allowed_department_ids)`);
+  const insertUser = db.prepare(`INSERT INTO users VALUES (@id,@company_id,@company_name,@department_id,@department_name,@name,@email,@password,@role,@allowed_department_ids,@permissions)`);
   const insertActivity = db.prepare('INSERT INTO activities VALUES (@id,@name)');
   const insertSub = db.prepare('INSERT INTO sub_activities VALUES (@id,@activity_id,@name)');
   const insertHazard = db.prepare('INSERT INTO hazards VALUES (@id,@name,@description,@consequences,@existing_controls,@likelihood,@severity)');
@@ -121,7 +122,8 @@ const seedIfEmpty = () => {
       email: user.email,
       password: user.password,
       role: user.role,
-      allowed_department_ids: JSON.stringify(user.allowedDepartmentIds || [user.departmentId])
+      allowed_department_ids: JSON.stringify(user.allowedDepartmentIds || [user.departmentId]),
+      permissions: JSON.stringify(user.permissions || {})
     }));
 
     activities.forEach((activity) => {
@@ -154,6 +156,11 @@ const seedIfEmpty = () => {
 
 seedIfEmpty();
 
+const userColumns = db.prepare("PRAGMA table_info('users')").all();
+if (!userColumns.some((column) => column.name === 'permissions')) {
+  db.exec("ALTER TABLE users ADD COLUMN permissions TEXT NOT NULL DEFAULT '{}'");
+}
+
 const parseUser = (row) => ({
   id: row.id,
   companyId: row.company_id,
@@ -164,7 +171,17 @@ const parseUser = (row) => ({
   email: row.email,
   password: row.password,
   role: row.role,
-  allowedDepartmentIds: JSON.parse(row.allowed_department_ids)
+  allowedDepartmentIds: JSON.parse(row.allowed_department_ids),
+  permissions: {
+    canEditActivities: true,
+    canEditHazards: true,
+    canEditMappings: true,
+    canEditUsers: row.role === 'admin',
+    canEditRiskRegister: true,
+    canCustomizeRA: true,
+    canUseAIGenerator: true,
+    ...(row.permissions ? JSON.parse(row.permissions) : {})
+  }
 });
 
 export const dbService = {
@@ -184,6 +201,48 @@ export const dbService = {
     const existing = db.prepare('SELECT * FROM users WHERE id=? AND company_id=?').get(userId, companyId);
     if (!existing) return null;
     db.prepare('UPDATE users SET allowed_department_ids=? WHERE id=?').run(JSON.stringify(allowedDepartmentIds), userId);
+    return this.findUserById(userId);
+  },
+  createUser(companyAdmin, payload) {
+    const id = makeId('usr');
+    db.prepare('INSERT INTO users (id,company_id,company_name,department_id,department_name,name,email,password,role,allowed_department_ids,permissions) VALUES (?,?,?,?,?,?,?,?,?,?,?)').run(
+      id,
+      companyAdmin.companyId,
+      companyAdmin.companyName,
+      payload.departmentId,
+      payload.departmentName,
+      payload.name,
+      payload.email,
+      payload.password,
+      payload.role || 'user',
+      JSON.stringify(payload.allowedDepartmentIds || [payload.departmentId]),
+      JSON.stringify(payload.permissions || {})
+    );
+    return this.findUserById(id);
+  },
+  updateUser(userId, companyId, payload) {
+    const existing = db.prepare('SELECT * FROM users WHERE id=? AND company_id=?').get(userId, companyId);
+    if (!existing) return null;
+    db.prepare(`UPDATE users SET
+      name=?,
+      email=?,
+      department_id=?,
+      department_name=?,
+      role=?,
+      allowed_department_ids=?,
+      permissions=?,
+      password=?
+      WHERE id=?`).run(
+      payload.name || existing.name,
+      payload.email || existing.email,
+      payload.departmentId || existing.department_id,
+      payload.departmentName || existing.department_name,
+      payload.role || existing.role,
+      JSON.stringify(payload.allowedDepartmentIds || JSON.parse(existing.allowed_department_ids)),
+      JSON.stringify(payload.permissions || (existing.permissions ? JSON.parse(existing.permissions) : {})),
+      payload.password || existing.password,
+      userId
+    );
     return this.findUserById(userId);
   },
   getActivities() {
@@ -206,6 +265,16 @@ export const dbService = {
     const id = makeId('sub');
     db.prepare('INSERT INTO sub_activities VALUES (?,?,?)').run(id, activityId, name);
     return { id, name };
+  },
+  removeSubActivity(activityId, subActivityId) {
+    const exists = db.prepare('SELECT id FROM sub_activities WHERE id=? AND activity_id=?').get(subActivityId, activityId);
+    if (!exists) return false;
+    const tx = db.transaction(() => {
+      db.prepare('DELETE FROM mappings WHERE sub_activity_id=?').run(subActivityId);
+      db.prepare('DELETE FROM sub_activities WHERE id=?').run(subActivityId);
+    });
+    tx();
+    return true;
   },
   updateActivity(activityId, name) {
     const found = db.prepare('SELECT * FROM activities WHERE id=?').get(activityId);
@@ -297,9 +366,9 @@ export const dbService = {
       likelihood: row.likelihood,
       severity: row.severity,
       rpn: row.likelihood * row.severity,
-      residualLikelihood: 1,
-      residualSeverity: 1,
-      residualRpn: 1
+      residualLikelihood: null,
+      residualSeverity: null,
+      residualRpn: null
     }));
 
     return {
@@ -312,7 +381,7 @@ export const dbService = {
     const assessmentId = makeId('ra');
 
     const tx = db.transaction(() => {
-      db.prepare('INSERT INTO risk_assessments VALUES (?,?,?,?,?,?,?,?,?,?)').run(
+      db.prepare('INSERT INTO risk_assessments VALUES (?,?,?,?,?,?,?,?,?,?,?)').run(
         assessmentId,
         user.companyId,
         user.companyName,

@@ -61,9 +61,9 @@ export default function App() {
     <Layout user={user} onLogout={handleLogout}>
       <Routes>
         <Route path="/" element={<DashboardPage />} />
-        <Route path="/activities" element={<ActivityLibraryPage />} />
-        <Route path="/hazards" element={<HazardLibraryPage />} />
-        <Route path="/mapping" element={<MappingPage />} />
+        <Route path="/activities" element={<ActivityLibraryPage currentUser={user} />} />
+        <Route path="/hazards" element={<HazardLibraryPage currentUser={user} />} />
+        <Route path="/mapping" element={<MappingPage currentUser={user} />} />
         <Route path="/generate" element={<RAGeneratorPage {...context} user={user} />} />
         <Route
           path="/register"

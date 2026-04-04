@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 
-export default function ActivityLibraryPage() {
+export default function ActivityLibraryPage({ currentUser }) {
   const [activities, setActivities] = useState([]);
   const [newActivityName, setNewActivityName] = useState('');
   const [newSubActivityName, setNewSubActivityName] = useState('');
@@ -14,6 +14,7 @@ export default function ActivityLibraryPage() {
     subActivityId: '',
     name: ''
   });
+  const canEdit = currentUser?.role === 'admin' || currentUser?.permissions?.canEditActivities;
 
   useEffect(() => {
     api.getActivities().then((data) => {
@@ -134,7 +135,7 @@ export default function ActivityLibraryPage() {
               placeholder="e.g. Confined Space Entry"
             />
           </label>
-          <button className="btn" type="submit">Add Activity</button>
+          <button className="btn" type="submit" disabled={!canEdit}>Add Activity</button>
         </form>
 
         <form onSubmit={handleAddSubActivity} className="tile">
@@ -161,7 +162,7 @@ export default function ActivityLibraryPage() {
               placeholder="e.g. Gas testing"
             />
           </label>
-          <button className="btn" type="submit" disabled={!selectedActivityId}>
+          <button className="btn" type="submit" disabled={!selectedActivityId || !canEdit}>
             Add Sub-activity
           </button>
         </form>
@@ -192,7 +193,7 @@ export default function ActivityLibraryPage() {
           ) : (
             <div className="row-between">
               <h3>{activity.name}</h3>
-              <button type="button" className="btn small-btn secondary-btn" onClick={() => startActivityEdit(activity)}>
+              <button type="button" className="btn small-btn secondary-btn" disabled={!canEdit} onClick={() => startActivityEdit(activity)}>
                 Edit
               </button>
             </div>
@@ -223,9 +224,31 @@ export default function ActivityLibraryPage() {
                     <button
                       type="button"
                       className="btn small-btn secondary-btn"
+                      disabled={!canEdit}
                       onClick={() => startSubActivityEdit(activity.id, sub)}
                     >
                       Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="btn small-btn secondary-btn"
+                      disabled={!canEdit}
+                      onClick={async () => {
+                        try {
+                          await api.removeSubActivity(activity.id, sub.id);
+                          setActivities((prev) =>
+                            prev.map((item) =>
+                              item.id === activity.id
+                                ? { ...item, subActivities: item.subActivities.filter((s) => s.id !== sub.id) }
+                                : item
+                            )
+                          );
+                        } catch (requestError) {
+                          setError(requestError.message);
+                        }
+                      }}
+                    >
+                      Remove
                     </button>
                   </>
                 )}

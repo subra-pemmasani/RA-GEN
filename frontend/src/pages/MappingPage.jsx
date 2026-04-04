@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 
-export default function MappingPage() {
+export default function MappingPage({ currentUser }) {
   const [activities, setActivities] = useState([]);
   const [hazards, setHazards] = useState([]);
   const [mappings, setMappings] = useState([]);
   const [error, setError] = useState('');
+  const canEdit = currentUser?.role === 'admin' || currentUser?.permissions?.canEditMappings;
 
   useEffect(() => {
     Promise.all([api.getActivities(), api.getHazards(), api.getMappings()]).then(
@@ -80,6 +81,7 @@ export default function MappingPage() {
                           type="button"
                           className="hazard-chip"
                           onClick={() => removeHazard(activity.id, subActivity.id, hazardId)}
+                          disabled={!canEdit}
                           title="Click to remove"
                         >
                           {hazard.name} ✕
@@ -90,6 +92,7 @@ export default function MappingPage() {
                     <select
                       className="plus-chip"
                       value=""
+                      disabled={!canEdit}
                       onChange={(event) => addHazard(activity.id, subActivity.id, event.target.value)}
                     >
                       <option value="">+ Add Hazard</option>

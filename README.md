@@ -34,6 +34,13 @@ A beginner-friendly full-stack web application to convert an Excel-based risk as
 - Company and department context per user
 - Risk Register with department-based visibility
 - Admin page to grant cross-department visibility within the same company
+- Admin page to create users and set page/data edit permissions
+
+## AI RA generation (optional)
+- Supports local Ollama integration via backend endpoint `/api/ai/generate-ra`
+- Configure:
+  - `OLLAMA_URL` (default: `http://localhost:11434/api/generate`)
+  - `OLLAMA_MODEL` (default: `llama3.1`)
 
 ### Demo users
 - `admin@alpha.com` / `admin123`

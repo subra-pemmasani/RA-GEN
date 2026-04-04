@@ -86,6 +86,14 @@ const adminRequired = (req, res, next) => {
   return next();
 };
 
+const permissionRequired = (key) => (req, res, next) => {
+  if (req.user.role === 'admin') return next();
+  if (!req.user.permissions?.[key]) {
+    return res.status(403).json({ message: `Permission denied: ${key}` });
+  }
+  return next();
+};
+
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', database: 'sqlite' }));
 
 app.post('/api/auth/login', (req, res) => {
@@ -107,6 +115,15 @@ app.get('/api/users', authRequired, adminRequired, (req, res) => {
   res.json(users);
 });
 
+app.post('/api/users', authRequired, adminRequired, (req, res) => {
+  const { name, email, password, departmentId, departmentName } = req.body;
+  if (!name || !email || !password || !departmentId || !departmentName) {
+    return res.status(400).json({ message: 'name, email, password, departmentId and departmentName are required.' });
+  }
+  const created = dbService.createUser(req.user, req.body);
+  return res.status(201).json(sanitizeUser(created));
+});
+
 app.put('/api/users/:userId/department-access', authRequired, adminRequired, (req, res) => {
   const { allowedDepartmentIds } = req.body;
   if (!Array.isArray(allowedDepartmentIds)) {
@@ -118,16 +135,22 @@ app.put('/api/users/:userId/department-access', authRequired, adminRequired, (re
   return res.json(sanitizeUser(updated));
 });
 
+app.put('/api/users/:userId', authRequired, adminRequired, (req, res) => {
+  const updated = dbService.updateUser(req.params.userId, req.user.companyId, req.body);
+  if (!updated) return res.status(404).json({ message: 'User not found in your company.' });
+  return res.json(sanitizeUser(updated));
+});
+
 app.use('/api', authRequired);
 
 app.get('/api/activities', (_req, res) => res.json(dbService.getActivities()));
-app.post('/api/activities', (req, res) => {
+app.post('/api/activities', permissionRequired('canEditActivities'), (req, res) => {
   const name = String(req.body.name || '').trim();
   if (!name) return res.status(400).json({ message: 'Activity name is required.' });
   return res.status(201).json(dbService.createActivity(name));
 });
 
-app.post('/api/activities/:activityId/sub-activities', (req, res) => {
+app.post('/api/activities/:activityId/sub-activities', permissionRequired('canEditActivities'), (req, res) => {
   const name = String(req.body.name || '').trim();
   if (!name) return res.status(400).json({ message: 'Sub-activity name is required.' });
   const created = dbService.createSubActivity(req.params.activityId, name);
@@ -135,7 +158,13 @@ app.post('/api/activities/:activityId/sub-activities', (req, res) => {
   return res.status(201).json(created);
 });
 
-app.put('/api/activities/:activityId', (req, res) => {
+app.delete('/api/activities/:activityId/sub-activities/:subActivityId', permissionRequired('canEditActivities'), (req, res) => {
+  const ok = dbService.removeSubActivity(req.params.activityId, req.params.subActivityId);
+  if (!ok) return res.status(404).json({ message: 'Sub-activity not found.' });
+  return res.status(204).send();
+});
+
+app.put('/api/activities/:activityId', permissionRequired('canEditActivities'), (req, res) => {
   const name = String(req.body.name || '').trim();
   if (!name) return res.status(400).json({ message: 'Activity name is required.' });
   const updated = dbService.updateActivity(req.params.activityId, name);
@@ -143,7 +172,7 @@ app.put('/api/activities/:activityId', (req, res) => {
   return res.json(updated);
 });
 
-app.put('/api/activities/:activityId/sub-activities/:subActivityId', (req, res) => {
+app.put('/api/activities/:activityId/sub-activities/:subActivityId', permissionRequired('canEditActivities'), (req, res) => {
   const name = String(req.body.name || '').trim();
   if (!name) return res.status(400).json({ message: 'Sub-activity name is required.' });
   const updated = dbService.updateSubActivity(req.params.activityId, req.params.subActivityId, name);
@@ -152,14 +181,14 @@ app.put('/api/activities/:activityId/sub-activities/:subActivityId', (req, res) 
 });
 
 app.get('/api/hazards', (_req, res) => res.json(dbService.getHazards()));
-app.post('/api/hazards', (req, res) => {
+app.post('/api/hazards', permissionRequired('canEditHazards'), (req, res) => {
   const payload = req.body;
   if (!payload.name || !payload.description || !payload.consequences || !payload.existingControls) {
     return res.status(400).json({ message: 'All hazard fields are required.' });
   }
   return res.status(201).json(dbService.createHazard({ ...payload, likelihood: Number(payload.likelihood), severity: Number(payload.severity) }));
 });
-app.put('/api/hazards/:hazardId', (req, res) => {
+app.put('/api/hazards/:hazardId', permissionRequired('canEditHazards'), (req, res) => {
   const payload = req.body;
   const updated = dbService.updateHazard(req.params.hazardId, { ...payload, likelihood: Number(payload.likelihood), severity: Number(payload.severity) });
   if (!updated) return res.status(404).json({ message: 'Hazard not found.' });
@@ -167,7 +196,7 @@ app.put('/api/hazards/:hazardId', (req, res) => {
 });
 
 app.get('/api/mappings', (_req, res) => res.json(dbService.getMappings()));
-app.put('/api/mappings/:activityId/:subActivityId', (req, res) => {
+app.put('/api/mappings/:activityId/:subActivityId', permissionRequired('canEditMappings'), (req, res) => {
   const hazardIds = Array.isArray(req.body.hazardIds) ? [...new Set(req.body.hazardIds)] : null;
   if (!hazardIds) return res.status(400).json({ message: 'hazardIds must be an array.' });
   return res.json(dbService.replaceMappings(req.params.activityId, req.params.subActivityId, hazardIds));
@@ -196,6 +225,61 @@ app.post('/api/risk-assessments', (req, res) => {
 
   const created = dbService.createRiskAssessment(req.user, req.body);
   return res.status(201).json(created);
+});
+
+app.post('/api/ai/generate-ra', permissionRequired('canUseAIGenerator'), async (req, res) => {
+  const { activityName, jobScope } = req.body;
+  if (!jobScope) return res.status(400).json({ message: 'jobScope is required.' });
+
+  const ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434/api/generate';
+  const prompt = `Generate a risk assessment in strict JSON format for this job scope.
+Activity: ${activityName || 'General'}
+Job Scope: ${jobScope}
+Return JSON only in this shape:
+{"title":"","rows":[{"hazardName":"","hazardDescription":"","consequences":"","existingControls":"","additionalControls":"","likelihood":1,"severity":1,"residualLikelihood":1,"residualSeverity":1}]}`;
+  try {
+    const response = await fetch(ollamaUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: process.env.OLLAMA_MODEL || 'llama3.1', prompt, stream: false })
+    });
+
+    if (!response.ok) {
+      return res.status(502).json({ message: 'Failed to connect to Ollama.' });
+    }
+
+    const payload = await response.json();
+    const text = payload.response || '{}';
+    const jsonStart = text.indexOf('{');
+    const jsonEnd = text.lastIndexOf('}');
+    const parsed = JSON.parse(text.slice(jsonStart, jsonEnd + 1));
+
+    const rows = (parsed.rows || []).map((row, index) => {
+      const likelihood = Number(row.likelihood) || 1;
+      const severity = Number(row.severity) || 1;
+      const residualLikelihood = Number(row.residualLikelihood) || 1;
+      const residualSeverity = Number(row.residualSeverity) || 1;
+      return {
+        mappingId: dbService.makeId(`ai-${index}`),
+        hazardId: null,
+        hazardName: row.hazardName || 'AI Hazard',
+        hazardDescription: row.hazardDescription || '',
+        consequences: row.consequences || '',
+        existingControls: row.existingControls || '',
+        additionalControls: row.additionalControls || '',
+        likelihood,
+        severity,
+        rpn: likelihood * severity,
+        residualLikelihood,
+        residualSeverity,
+        residualRpn: residualLikelihood * residualSeverity
+      };
+    });
+
+    return res.json({ title: parsed.title || `AI RA - ${activityName || 'General'}`, rows });
+  } catch {
+    return res.status(500).json({ message: 'Unable to generate AI RA response.' });
+  }
 });
 
 app.use(express.static(frontendDist));

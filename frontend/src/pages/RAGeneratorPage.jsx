@@ -12,6 +12,11 @@ export default function RAGeneratorPage({ setLatestAssessment, user }) {
   const [subActivityRows, setSubActivityRows] = useState([]);
   const [title, setTitle] = useState('');
   const [error, setError] = useState('');
+  const [customMode, setCustomMode] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
+
+  const canCustomize = user.role === 'admin' || user.permissions?.canCustomizeRA;
+  const canUseAi = user.role === 'admin' || user.permissions?.canUseAIGenerator;
 
   useEffect(() => {
     api.getActivities().then((data) => {
@@ -58,7 +63,10 @@ export default function RAGeneratorPage({ setLatestAssessment, user }) {
             if (i !== index) return row;
             const next = { ...row, ...updates };
             next.rpn = Number(next.likelihood) * Number(next.severity);
-            next.residualRpn = Number(next.residualLikelihood) * Number(next.residualSeverity);
+            next.residualRpn =
+              next.residualLikelihood && next.residualSeverity
+                ? Number(next.residualLikelihood) * Number(next.residualSeverity)
+                : null;
             return next;
           })
         };
@@ -103,6 +111,26 @@ export default function RAGeneratorPage({ setLatestAssessment, user }) {
     }
   };
 
+  const handleGenerateAi = async () => {
+    if (!aiPrompt.trim()) return;
+    setError('');
+
+    try {
+      const result = await api.generateAiRa({ activityName: selectedActivity?.name, jobScope: aiPrompt });
+      setTitle(result.title);
+      setCustomMode(true);
+      setSubActivityRows([
+        {
+          subActivityId: `ai-${Date.now()}`,
+          subActivityName: 'AI Generated Scope',
+          rows: result.rows
+        }
+      ]);
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  };
+
   return (
     <section className="card">
       <h2>RA Generator</h2>
@@ -125,6 +153,12 @@ export default function RAGeneratorPage({ setLatestAssessment, user }) {
         </label>
       </div>
 
+      <div className="chip-wrap">
+        <button className={`hazard-chip ${customMode ? '' : 'inactive-chip'}`} type="button" disabled={!canCustomize} onClick={() => setCustomMode((prev) => !prev)}>
+          {customMode ? 'Custom Mode ON' : 'Enable Custom Mode'}
+        </button>
+      </div>
+
       <div className="tile">
         <h3>Select Multiple Sub-activities</h3>
         <div className="chip-wrap">
@@ -144,9 +178,32 @@ export default function RAGeneratorPage({ setLatestAssessment, user }) {
         </div>
       </div>
 
+      <div className="tile">
+        <h3>Generate AI RA (Ollama)</h3>
+        <textarea rows={3} value={aiPrompt} onChange={(event) => setAiPrompt(event.target.value)} placeholder="Describe the job scope for AI-generated RA." />
+        <button type="button" className="btn" disabled={!canUseAi} onClick={handleGenerateAi}>Generate AI RA</button>
+      </div>
+
       {subActivityRows.map((entry) => (
         <div key={entry.subActivityId} className="tile">
-          <h3>{entry.subActivityName}</h3>
+          <h3>
+            {customMode ? (
+              <input
+                value={entry.subActivityName}
+                onChange={(event) =>
+                  setSubActivityRows((prev) =>
+                    prev.map((item) =>
+                      item.subActivityId === entry.subActivityId
+                        ? { ...item, subActivityName: event.target.value }
+                        : item
+                    )
+                  )
+                }
+              />
+            ) : (
+              entry.subActivityName
+            )}
+          </h3>
           <div className="table-wrap">
             <table>
               <thead>
@@ -167,73 +224,37 @@ export default function RAGeneratorPage({ setLatestAssessment, user }) {
               <tbody>
                 {entry.rows.map((row, index) => (
                   <tr key={row.mappingId}>
-                    <td>{row.hazardName}</td>
-                    <td>{row.hazardDescription}</td>
-                    <td>{row.consequences}</td>
-                    <td>{row.existingControls}</td>
+                    <td>{customMode ? <input value={row.hazardName} onChange={(e) => updateRow(entry.subActivityId, index, { hazardName: e.target.value })} /> : row.hazardName}</td>
+                    <td>{customMode ? <input value={row.hazardDescription} onChange={(e) => updateRow(entry.subActivityId, index, { hazardDescription: e.target.value })} /> : row.hazardDescription}</td>
+                    <td>{customMode ? <input value={row.consequences} onChange={(e) => updateRow(entry.subActivityId, index, { consequences: e.target.value })} /> : row.consequences}</td>
+                    <td>{customMode ? <input value={row.existingControls} onChange={(e) => updateRow(entry.subActivityId, index, { existingControls: e.target.value })} /> : row.existingControls}</td>
                     <td>
-                      <select
-                        value={row.likelihood}
-                        onChange={(event) =>
-                          updateRow(entry.subActivityId, index, { likelihood: Number(event.target.value) })
-                        }
-                      >
-                        {scoreOptions.map((score) => (
-                          <option key={score} value={score}>{score}</option>
-                        ))}
+                      <select value={row.likelihood} onChange={(event) => updateRow(entry.subActivityId, index, { likelihood: Number(event.target.value) })}>
+                        {scoreOptions.map((score) => <option key={score} value={score}>{score}</option>)}
                       </select>
                     </td>
                     <td>
-                      <select
-                        value={row.severity}
-                        onChange={(event) =>
-                          updateRow(entry.subActivityId, index, { severity: Number(event.target.value) })
-                        }
-                      >
-                        {scoreOptions.map((score) => (
-                          <option key={score} value={score}>{score}</option>
-                        ))}
+                      <select value={row.severity} onChange={(event) => updateRow(entry.subActivityId, index, { severity: Number(event.target.value) })}>
+                        {scoreOptions.map((score) => <option key={score} value={score}>{score}</option>)}
                       </select>
                     </td>
                     <td>{row.rpn}</td>
                     <td>
-                      <textarea
-                        rows={2}
-                        value={row.additionalControls}
-                        onChange={(event) =>
-                          updateRow(entry.subActivityId, index, { additionalControls: event.target.value })
-                        }
-                      />
+                      <textarea rows={2} value={row.additionalControls || ''} onChange={(event) => updateRow(entry.subActivityId, index, { additionalControls: event.target.value })} />
                     </td>
                     <td>
-                      <select
-                        value={row.residualLikelihood}
-                        onChange={(event) =>
-                          updateRow(entry.subActivityId, index, {
-                            residualLikelihood: Number(event.target.value)
-                          })
-                        }
-                      >
-                        {scoreOptions.map((score) => (
-                          <option key={score} value={score}>{score}</option>
-                        ))}
+                      <select value={row.residualLikelihood || ''} onChange={(event) => updateRow(entry.subActivityId, index, { residualLikelihood: Number(event.target.value) || null })}>
+                        <option value="">-</option>
+                        {scoreOptions.map((score) => <option key={score} value={score}>{score}</option>)}
                       </select>
                     </td>
                     <td>
-                      <select
-                        value={row.residualSeverity}
-                        onChange={(event) =>
-                          updateRow(entry.subActivityId, index, {
-                            residualSeverity: Number(event.target.value)
-                          })
-                        }
-                      >
-                        {scoreOptions.map((score) => (
-                          <option key={score} value={score}>{score}</option>
-                        ))}
+                      <select value={row.residualSeverity || ''} onChange={(event) => updateRow(entry.subActivityId, index, { residualSeverity: Number(event.target.value) || null })}>
+                        <option value="">-</option>
+                        {scoreOptions.map((score) => <option key={score} value={score}>{score}</option>)}
                       </select>
                     </td>
-                    <td>{row.residualRpn}</td>
+                    <td>{row.residualRpn || ''}</td>
                   </tr>
                 ))}
               </tbody>

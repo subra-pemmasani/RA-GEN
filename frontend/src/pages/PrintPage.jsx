@@ -32,8 +32,12 @@ export default function PrintPage({ latestAssessment }) {
                 <th>Description</th>
                 <th>Consequences</th>
                 <th>Existing Controls</th>
+                <th>L</th>
+                <th>S</th>
                 <th>RPN</th>
                 <th>Additional Controls</th>
+                <th>Residual L</th>
+                <th>Residual S</th>
                 <th>Residual RPN</th>
               </tr>
             </thead>
@@ -44,9 +48,13 @@ export default function PrintPage({ latestAssessment }) {
                   <td>{row.hazardDescription}</td>
                   <td>{row.consequences}</td>
                   <td>{row.existingControls}</td>
-                  <td>{row.rpn}</td>
-                  <td>{row.additionalControls || '-'}</td>
-                  <td>{row.residualRpn}</td>
+                  <td>{row.likelihood ?? ''}</td>
+                  <td>{row.severity ?? ''}</td>
+                  <td>{row.rpn ?? ''}</td>
+                  <td>{row.additionalControls || ''}</td>
+                  <td>{row.residualLikelihood ?? ''}</td>
+                  <td>{row.residualSeverity ?? ''}</td>
+                  <td>{row.residualRpn ?? ''}</td>
                 </tr>
               ))}
             </tbody>

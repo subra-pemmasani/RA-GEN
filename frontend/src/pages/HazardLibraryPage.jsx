@@ -10,12 +10,13 @@ const emptyHazard = {
   severity: 1
 };
 
-export default function HazardLibraryPage() {
+export default function HazardLibraryPage({ currentUser }) {
   const [hazards, setHazards] = useState([]);
   const [newHazard, setNewHazard] = useState(emptyHazard);
   const [editingHazardId, setEditingHazardId] = useState('');
   const [editingHazard, setEditingHazard] = useState(emptyHazard);
   const [error, setError] = useState('');
+  const canEdit = currentUser?.role === 'admin' || currentUser?.permissions?.canEditHazards;
 
   useEffect(() => {
     api.getHazards().then(setHazards);
@@ -186,7 +187,7 @@ export default function HazardLibraryPage() {
                         </button>
                       </div>
                     ) : (
-                      <button className="btn small-btn secondary-btn" type="button" onClick={() => startEditing(hazard)}>
+                      <button className="btn small-btn secondary-btn" type="button" disabled={!canEdit} onClick={() => startEditing(hazard)}>
                         Edit
                       </button>
                     )}
@@ -248,7 +249,7 @@ export default function HazardLibraryPage() {
                 </select>
               </td>
               <td>
-                <button className="btn small-btn" type="button" onClick={handleNewHazardSubmit}>
+                <button className="btn small-btn" type="button" disabled={!canEdit} onClick={handleNewHazardSubmit}>
                   Add
                 </button>
               </td>
