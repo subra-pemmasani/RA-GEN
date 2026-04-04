@@ -72,6 +72,13 @@ export default function RAGeneratorPage({ setLatestAssessment, user }) {
     );
   };
 
+  const handleActivityChange = (nextActivityId) => {
+    setSelectedActivityId(nextActivityId);
+    const nextActivity = activities.find((activity) => activity.id === nextActivityId);
+    const firstSubActivityId = nextActivity?.subActivities[0]?.id;
+    setSelectedSubActivityIds(firstSubActivityId ? [firstSubActivityId] : []);
+  };
+
   const handleGeneratePrint = async () => {
     if (!selectedActivity || subActivityRows.length === 0) return;
     setError('');
@@ -108,7 +115,7 @@ export default function RAGeneratorPage({ setLatestAssessment, user }) {
         </label>
         <label>
           Activity
-          <select value={selectedActivityId} onChange={(event) => setSelectedActivityId(event.target.value)}>
+          <select value={selectedActivityId} onChange={(event) => handleActivityChange(event.target.value)}>
             {activities.map((activity) => (
               <option key={activity.id} value={activity.id}>
                 {activity.name}

@@ -59,6 +59,9 @@ docker run -d --name ra-generator -p 4000:4000 ra-generator
 ```
 Open `http://YOUR_SERVER_IP:4000`
 
+Auth token signing:
+- Set `TOKEN_SECRET` in environment for production deployments.
+
 Or with compose:
 ```bash
 docker compose up -d --build

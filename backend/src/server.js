@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import crypto from 'node:crypto';
 import {
   getActivities,
   getHazards,
@@ -17,6 +18,8 @@ import {
 
 const app = express();
 const port = process.env.PORT || 4000;
+const tokenSecret = process.env.TOKEN_SECRET || 'dev-only-change-this-secret';
+const tokenTtlSeconds = 60 * 60 * 8;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const frontendDist = path.resolve(__dirname, '../../frontend/dist');
@@ -25,10 +28,54 @@ app.use(cors());
 app.use(express.json());
 
 const makeId = (prefix) => `${prefix}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
-const createToken = (userId) => Buffer.from(userId).toString('base64');
-const parseToken = (token) => {
+const toBase64Url = (input) =>
+  Buffer.from(input).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+
+const fromBase64Url = (input) => {
+  const padded = input + '='.repeat((4 - (input.length % 4)) % 4);
+  return Buffer.from(padded.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf-8');
+};
+
+const signTokenPayload = (payload) => {
+  const header = toBase64Url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const body = toBase64Url(JSON.stringify(payload));
+  const data = `${header}.${body}`;
+  const signature = crypto
+    .createHmac('sha256', tokenSecret)
+    .update(data)
+    .digest('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+
+  return `${data}.${signature}`;
+};
+
+const verifyToken = (token) => {
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+
+  const [header, body, signature] = parts;
+  const data = `${header}.${body}`;
+
+  const expectedSignature = crypto
+    .createHmac('sha256', tokenSecret)
+    .update(data)
+    .digest('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+
+  if (expectedSignature !== signature) {
+    return null;
+  }
+
   try {
-    return Buffer.from(token, 'base64').toString('utf-8');
+    const payload = JSON.parse(fromBase64Url(body));
+    if (!payload?.sub || !payload?.exp || payload.exp < Math.floor(Date.now() / 1000)) {
+      return null;
+    }
+    return payload;
   } catch {
     return null;
   }
@@ -46,13 +93,13 @@ const authRequired = async (req, res, next) => {
   }
 
   const token = authHeader.replace('Bearer ', '');
-  const userId = parseToken(token);
-  if (!userId) {
-    return res.status(401).json({ message: 'Invalid token.' });
+  const payload = verifyToken(token);
+  if (!payload) {
+    return res.status(401).json({ message: 'Invalid or expired token.' });
   }
 
   const users = await getUsers();
-  const user = users.find((item) => item.id === userId);
+  const user = users.find((item) => item.id === payload.sub);
   if (!user) {
     return res.status(401).json({ message: 'User not found.' });
   }
@@ -88,7 +135,15 @@ app.post('/api/auth/login', async (req, res) => {
     return res.status(401).json({ message: 'Invalid credentials.' });
   }
 
-  return res.json({ token: createToken(user.id), user: sanitizeUser(user) });
+  const now = Math.floor(Date.now() / 1000);
+  const token = signTokenPayload({
+    sub: user.id,
+    role: user.role,
+    companyId: user.companyId,
+    exp: now + tokenTtlSeconds
+  });
+
+  return res.json({ token, user: sanitizeUser(user), expiresIn: tokenTtlSeconds });
 });
 
 app.get('/api/auth/me', authRequired, async (req, res) => {
