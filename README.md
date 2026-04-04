@@ -37,10 +37,17 @@ A beginner-friendly full-stack web application to convert an Excel-based risk as
 - Admin page to create users and set page/data edit permissions
 
 ## AI RA generation (optional)
-- Supports local Ollama integration via backend endpoint `/api/ai/generate-ra`
+- Supports local Ollama and OpenAI-compatible APIs via `/api/ai/generate-ra`
+- Ollama must be installed and running separately (or as another container)
 - Configure:
   - `OLLAMA_URL` (default: `http://localhost:11434/api/generate`)
+  - `OLLAMA_BASE_URL` (default: `http://localhost:11434`)
   - `OLLAMA_MODEL` (default: `llama3.1`)
+  - `OPENAI_COMPAT_URL` (chat completions endpoint)
+  - `OPENAI_COMPAT_KEY` (API key)
+  - `OPENAI_COMPAT_MODEL` (default model)
+
+The backend forces AI output into your RA row schema (`hazardName`, `hazardDescription`, `consequences`, `existingControls`, scores, etc.) before returning data to the UI.
 
 ### Demo users
 - `admin@alpha.com` / `admin123`

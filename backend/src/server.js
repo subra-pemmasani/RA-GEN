@@ -228,57 +228,126 @@ app.post('/api/risk-assessments', (req, res) => {
 });
 
 app.post('/api/ai/generate-ra', permissionRequired('canUseAIGenerator'), async (req, res) => {
-  const { activityName, jobScope } = req.body;
+  const { activityName, jobScope, provider = 'ollama', config = {} } = req.body;
   if (!jobScope) return res.status(400).json({ message: 'jobScope is required.' });
 
-  const ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434/api/generate';
-  const prompt = `Generate a risk assessment in strict JSON format for this job scope.
+  const outputSchemaPrompt = `Generate a risk assessment in strict JSON format for this job scope.
 Activity: ${activityName || 'General'}
 Job Scope: ${jobScope}
 Return JSON only in this shape:
 {"title":"","rows":[{"hazardName":"","hazardDescription":"","consequences":"","existingControls":"","additionalControls":"","likelihood":1,"severity":1,"residualLikelihood":1,"residualSeverity":1}]}`;
-  try {
-    const response = await fetch(ollamaUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: process.env.OLLAMA_MODEL || 'llama3.1', prompt, stream: false })
-    });
 
-    if (!response.ok) {
-      return res.status(502).json({ message: 'Failed to connect to Ollama.' });
-    }
-
-    const payload = await response.json();
-    const text = payload.response || '{}';
-    const jsonStart = text.indexOf('{');
-    const jsonEnd = text.lastIndexOf('}');
-    const parsed = JSON.parse(text.slice(jsonStart, jsonEnd + 1));
-
-    const rows = (parsed.rows || []).map((row, index) => {
+  const normalizeRows = (parsedRows = []) =>
+    parsedRows.map((row, index) => {
       const likelihood = Number(row.likelihood) || 1;
       const severity = Number(row.severity) || 1;
-      const residualLikelihood = Number(row.residualLikelihood) || 1;
-      const residualSeverity = Number(row.residualSeverity) || 1;
+      const residualLikelihood = row.residualLikelihood ? Number(row.residualLikelihood) : null;
+      const residualSeverity = row.residualSeverity ? Number(row.residualSeverity) : null;
       return {
         mappingId: dbService.makeId(`ai-${index}`),
         hazardId: null,
-        hazardName: row.hazardName || 'AI Hazard',
-        hazardDescription: row.hazardDescription || '',
+        hazardName: row.hazardName || row.hazard || 'AI Hazard',
+        hazardDescription: row.hazardDescription || row.description || '',
         consequences: row.consequences || '',
-        existingControls: row.existingControls || '',
+        existingControls: row.existingControls || row.controls || '',
         additionalControls: row.additionalControls || '',
         likelihood,
         severity,
         rpn: likelihood * severity,
         residualLikelihood,
         residualSeverity,
-        residualRpn: residualLikelihood * residualSeverity
+        residualRpn:
+          residualLikelihood && residualSeverity ? residualLikelihood * residualSeverity : null
       };
     });
 
+  const parseResponseJson = (text) => {
+    const jsonStart = text.indexOf('{');
+    const jsonEnd = text.lastIndexOf('}');
+    return JSON.parse(text.slice(jsonStart, jsonEnd + 1));
+  };
+
+  try {
+    if (provider === 'openai_compatible') {
+      const apiUrl = config.apiUrl || process.env.OPENAI_COMPAT_URL;
+      const apiKey = config.apiKey || process.env.OPENAI_COMPAT_KEY;
+      const model = config.model || process.env.OPENAI_COMPAT_MODEL || 'gpt-4o-mini';
+
+      if (!apiUrl || !apiKey) {
+        return res.status(400).json({ message: 'apiUrl and apiKey are required for openai_compatible provider.' });
+      }
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'user', content: outputSchemaPrompt }],
+          temperature: 0.2
+        })
+      });
+
+      if (!response.ok) {
+        return res.status(502).json({ message: 'Failed to connect to OpenAI-compatible API.' });
+      }
+
+      const payload = await response.json();
+      const content = payload?.choices?.[0]?.message?.content || '{}';
+      const parsed = parseResponseJson(content);
+      const rows = normalizeRows(parsed.rows || []);
+      return res.json({ title: parsed.title || `AI RA - ${activityName || 'General'}`, rows });
+    }
+
+    const ollamaUrl = config.ollamaUrl || process.env.OLLAMA_URL || 'http://localhost:11434/api/generate';
+    const ollamaModel = config.model || process.env.OLLAMA_MODEL || 'llama3.1';
+    const response = await fetch(ollamaUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: ollamaModel, prompt: outputSchemaPrompt, stream: false })
+    });
+
+    if (!response.ok) return res.status(502).json({ message: 'Failed to connect to Ollama.' });
+
+    const payload = await response.json();
+    const parsed = parseResponseJson(payload.response || '{}');
+    const rows = normalizeRows(parsed.rows || []);
     return res.json({ title: parsed.title || `AI RA - ${activityName || 'General'}`, rows });
   } catch {
     return res.status(500).json({ message: 'Unable to generate AI RA response.' });
+  }
+});
+
+app.post('/api/ai/status', permissionRequired('canUseAIGenerator'), async (req, res) => {
+  try {
+    const { provider = 'ollama', config = {} } = req.body || {};
+    if (provider === 'openai_compatible') {
+      const apiUrl = config.apiUrl || process.env.OPENAI_COMPAT_URL;
+      const apiKey = config.apiKey || process.env.OPENAI_COMPAT_KEY;
+      if (!apiUrl || !apiKey) return res.json({ available: false });
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: config.model || process.env.OPENAI_COMPAT_MODEL || 'gpt-4o-mini',
+          messages: [{ role: 'user', content: 'ping' }],
+          max_tokens: 1
+        })
+      });
+      return res.json({ available: response.ok });
+    }
+
+    const base = config.baseUrl || process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+    const response = await fetch(`${base}/api/tags`);
+    if (!response.ok) return res.json({ available: false });
+    return res.json({ available: true });
+  } catch {
+    return res.json({ available: false });
   }
 });
 

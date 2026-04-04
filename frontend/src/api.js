@@ -60,5 +60,6 @@ export const api = {
 
   getRiskAssessments: () => getJson('/api/risk-assessments'),
   createRiskAssessment: (payload) => postJson('/api/risk-assessments', payload),
+  getAiStatus: (payload) => postJson('/api/ai/status', payload),
   generateAiRa: (payload) => postJson('/api/ai/generate-ra', payload)
 };

@@ -27,6 +27,7 @@ export default function ActivityLibraryPage({ currentUser }) {
 
   const handleAddActivity = async (event) => {
     event.preventDefault();
+    if (!canEdit) return;
     setError('');
 
     try {
@@ -42,7 +43,7 @@ export default function ActivityLibraryPage({ currentUser }) {
 
   const handleAddSubActivity = async (event) => {
     event.preventDefault();
-    if (!selectedActivityId) return;
+    if (!selectedActivityId || !canEdit) return;
     setError('');
 
     try {
@@ -69,7 +70,7 @@ export default function ActivityLibraryPage({ currentUser }) {
 
   const handleActivityEditSave = async (event) => {
     event.preventDefault();
-    if (!editingActivityId) return;
+    if (!editingActivityId || !canEdit) return;
     setError('');
 
     try {
@@ -94,7 +95,7 @@ export default function ActivityLibraryPage({ currentUser }) {
 
   const handleSubActivityEditSave = async (event) => {
     event.preventDefault();
-    if (!editingSubActivity.activityId || !editingSubActivity.subActivityId) return;
+    if (!editingSubActivity.activityId || !editingSubActivity.subActivityId || !canEdit) return;
     setError('');
 
     try {
@@ -193,9 +194,11 @@ export default function ActivityLibraryPage({ currentUser }) {
           ) : (
             <div className="row-between">
               <h3>{activity.name}</h3>
-              <button type="button" className="btn small-btn secondary-btn" disabled={!canEdit} onClick={() => startActivityEdit(activity)}>
-                Edit
-              </button>
+              {canEdit ? (
+                <button type="button" className="btn small-btn secondary-btn" onClick={() => startActivityEdit(activity)}>
+                  Manage
+                </button>
+              ) : null}
             </div>
           )}
           <ul>
@@ -221,35 +224,37 @@ export default function ActivityLibraryPage({ currentUser }) {
                 ) : (
                   <>
                     <span>{sub.name}</span>
-                    <button
-                      type="button"
-                      className="btn small-btn secondary-btn"
-                      disabled={!canEdit}
-                      onClick={() => startSubActivityEdit(activity.id, sub)}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      className="btn small-btn secondary-btn"
-                      disabled={!canEdit}
-                      onClick={async () => {
-                        try {
-                          await api.removeSubActivity(activity.id, sub.id);
-                          setActivities((prev) =>
-                            prev.map((item) =>
-                              item.id === activity.id
-                                ? { ...item, subActivities: item.subActivities.filter((s) => s.id !== sub.id) }
-                                : item
-                            )
-                          );
-                        } catch (requestError) {
-                          setError(requestError.message);
-                        }
-                      }}
-                    >
-                      Remove
-                    </button>
+                    {canEdit ? (
+                      <div className="inline-form">
+                        <button
+                          type="button"
+                          className="btn small-btn secondary-btn"
+                          onClick={() => startSubActivityEdit(activity.id, sub)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="btn small-btn secondary-btn"
+                          onClick={async () => {
+                            try {
+                              await api.removeSubActivity(activity.id, sub.id);
+                              setActivities((prev) =>
+                                prev.map((item) =>
+                                  item.id === activity.id
+                                    ? { ...item, subActivities: item.subActivities.filter((s) => s.id !== sub.id) }
+                                    : item
+                                )
+                              );
+                            } catch (requestError) {
+                              setError(requestError.message);
+                            }
+                          }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : null}
                   </>
                 )}
               </li>

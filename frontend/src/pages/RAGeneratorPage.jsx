@@ -14,6 +14,15 @@ export default function RAGeneratorPage({ setLatestAssessment, user }) {
   const [error, setError] = useState('');
   const [customMode, setCustomMode] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
+  const [aiAvailable, setAiAvailable] = useState(false);
+  const [aiProvider, setAiProvider] = useState(localStorage.getItem('ra_ai_provider') || 'ollama');
+  const [aiConfig, setAiConfig] = useState(() => ({
+    ollamaUrl: localStorage.getItem('ra_ai_ollama_url') || '',
+    baseUrl: localStorage.getItem('ra_ai_ollama_base_url') || '',
+    apiUrl: localStorage.getItem('ra_ai_api_url') || '',
+    apiKey: localStorage.getItem('ra_ai_api_key') || '',
+    model: localStorage.getItem('ra_ai_model') || ''
+  }));
 
   const canCustomize = user.role === 'admin' || user.permissions?.canCustomizeRA;
   const canUseAi = user.role === 'admin' || user.permissions?.canUseAIGenerator;
@@ -27,6 +36,14 @@ export default function RAGeneratorPage({ setLatestAssessment, user }) {
       }
     });
   }, []);
+
+  useEffect(() => {
+    if (!canUseAi) return;
+    api
+      .getAiStatus({ provider: aiProvider, config: aiConfig })
+      .then((payload) => setAiAvailable(Boolean(payload?.available)))
+      .catch(() => setAiAvailable(false));
+  }, [canUseAi, aiProvider, aiConfig]);
 
   const selectedActivity = useMemo(
     () => activities.find((activity) => activity.id === selectedActivityId),
@@ -116,7 +133,18 @@ export default function RAGeneratorPage({ setLatestAssessment, user }) {
     setError('');
 
     try {
-      const result = await api.generateAiRa({ activityName: selectedActivity?.name, jobScope: aiPrompt });
+      localStorage.setItem('ra_ai_provider', aiProvider);
+      localStorage.setItem('ra_ai_ollama_url', aiConfig.ollamaUrl || '');
+      localStorage.setItem('ra_ai_ollama_base_url', aiConfig.baseUrl || '');
+      localStorage.setItem('ra_ai_api_url', aiConfig.apiUrl || '');
+      localStorage.setItem('ra_ai_api_key', aiConfig.apiKey || '');
+      localStorage.setItem('ra_ai_model', aiConfig.model || '');
+      const result = await api.generateAiRa({
+        activityName: selectedActivity?.name,
+        jobScope: aiPrompt,
+        provider: aiProvider,
+        config: aiConfig
+      });
       setTitle(result.title);
       setCustomMode(true);
       setSubActivityRows([
@@ -154,10 +182,16 @@ export default function RAGeneratorPage({ setLatestAssessment, user }) {
       </div>
 
       <div className="chip-wrap">
-        <button className={`hazard-chip ${customMode ? '' : 'inactive-chip'}`} type="button" disabled={!canCustomize} onClick={() => setCustomMode((prev) => !prev)}>
-          {customMode ? 'Custom Mode ON' : 'Enable Custom Mode'}
+        <button
+          className={`hazard-chip ${customMode ? '' : 'inactive-chip'}`}
+          type="button"
+          disabled={!canCustomize}
+          onClick={() => setCustomMode((prev) => !prev)}
+        >
+          {customMode ? 'Exit Editable Custom RA' : 'Open Editable Custom RA'}
         </button>
       </div>
+      {customMode ? <p className="muted-text">Custom mode active: all RA text fields are editable for this one-off RA only.</p> : null}
 
       <div className="tile">
         <h3>Select Multiple Sub-activities</h3>
@@ -180,8 +214,76 @@ export default function RAGeneratorPage({ setLatestAssessment, user }) {
 
       <div className="tile">
         <h3>Generate AI RA (Ollama)</h3>
+        <label>
+          AI Provider
+          <select value={aiProvider} onChange={(event) => setAiProvider(event.target.value)}>
+            <option value="ollama">Ollama (Local)</option>
+            <option value="openai_compatible">OpenAI-Compatible API</option>
+          </select>
+        </label>
+        {aiProvider === 'ollama' ? (
+          <div className="inline-fields">
+            <label>
+              Ollama Generate URL
+              <input
+                value={aiConfig.ollamaUrl}
+                onChange={(event) => setAiConfig((prev) => ({ ...prev, ollamaUrl: event.target.value }))}
+                placeholder="http://localhost:11434/api/generate"
+              />
+            </label>
+            <label>
+              Ollama Base URL (status)
+              <input
+                value={aiConfig.baseUrl}
+                onChange={(event) => setAiConfig((prev) => ({ ...prev, baseUrl: event.target.value }))}
+                placeholder="http://localhost:11434"
+              />
+            </label>
+            <label>
+              Model
+              <input
+                value={aiConfig.model}
+                onChange={(event) => setAiConfig((prev) => ({ ...prev, model: event.target.value }))}
+                placeholder="llama3.1"
+              />
+            </label>
+          </div>
+        ) : (
+          <div className="inline-fields">
+            <label>
+              API URL
+              <input
+                value={aiConfig.apiUrl}
+                onChange={(event) => setAiConfig((prev) => ({ ...prev, apiUrl: event.target.value }))}
+                placeholder="https://api.openai.com/v1/chat/completions"
+              />
+            </label>
+            <label>
+              API Key
+              <input
+                type="password"
+                value={aiConfig.apiKey}
+                onChange={(event) => setAiConfig((prev) => ({ ...prev, apiKey: event.target.value }))}
+                placeholder="sk-..."
+              />
+            </label>
+            <label>
+              Model
+              <input
+                value={aiConfig.model}
+                onChange={(event) => setAiConfig((prev) => ({ ...prev, model: event.target.value }))}
+                placeholder="gpt-4o-mini"
+              />
+            </label>
+          </div>
+        )}
+        <p className="muted-text">
+          {aiAvailable
+            ? 'AI provider is reachable.'
+            : 'AI provider not detected. Check URL/API key/model and ensure service is running.'}
+        </p>
         <textarea rows={3} value={aiPrompt} onChange={(event) => setAiPrompt(event.target.value)} placeholder="Describe the job scope for AI-generated RA." />
-        <button type="button" className="btn" disabled={!canUseAi} onClick={handleGenerateAi}>Generate AI RA</button>
+        <button type="button" className="btn" disabled={!canUseAi || !aiAvailable} onClick={handleGenerateAi}>Generate AI RA</button>
       </div>
 
       {subActivityRows.map((entry) => (
