@@ -5,7 +5,7 @@ A beginner-friendly full-stack web application to convert an Excel-based risk as
 ## Stack
 - Frontend: React + Vite
 - Backend: Node.js + Express
-- Data source (v1): local JSON files
+- Data source (v1.2): SQLite (auto-seeded from JSON on first run)
 
 ## Version 1 Pages
 1. Dashboard
@@ -71,3 +71,4 @@ docker compose up -d --build
 - `backend/data/activities.json`
 - `backend/data/hazards.json`
 - `backend/data/activityHazardMappings.json`
+- `backend/data/ra_gen.db` (created automatically)

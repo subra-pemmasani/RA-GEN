@@ -3,18 +3,7 @@ import cors from 'cors';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
-import {
-  getActivities,
-  getHazards,
-  getMappings,
-  getRiskAssessments,
-  getUsers,
-  saveActivities,
-  saveHazards,
-  saveMappings,
-  saveRiskAssessments,
-  saveUsers
-} from './dataStore.js';
+import { dbService } from './db.js';
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -27,10 +16,8 @@ const frontendDist = path.resolve(__dirname, '../../frontend/dist');
 app.use(cors());
 app.use(express.json());
 
-const makeId = (prefix) => `${prefix}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 const toBase64Url = (input) =>
   Buffer.from(input).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-
 const fromBase64Url = (input) => {
   const padded = input + '='.repeat((4 - (input.length % 4)) % 4);
   return Buffer.from(padded.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf-8');
@@ -54,27 +41,21 @@ const signTokenPayload = (payload) => {
 const verifyToken = (token) => {
   const parts = token.split('.');
   if (parts.length !== 3) return null;
-
   const [header, body, signature] = parts;
-  const data = `${header}.${body}`;
 
   const expectedSignature = crypto
     .createHmac('sha256', tokenSecret)
-    .update(data)
+    .update(`${header}.${body}`)
     .digest('base64')
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/g, '');
 
-  if (expectedSignature !== signature) {
-    return null;
-  }
+  if (expectedSignature !== signature) return null;
 
   try {
     const payload = JSON.parse(fromBase64Url(body));
-    if (!payload?.sub || !payload?.exp || payload.exp < Math.floor(Date.now() / 1000)) {
-      return null;
-    }
+    if (!payload?.sub || payload.exp < Math.floor(Date.now() / 1000)) return null;
     return payload;
   } catch {
     return null;
@@ -82,426 +63,144 @@ const verifyToken = (token) => {
 };
 
 const sanitizeUser = (user) => {
-  const { password, ...safeUser } = user;
-  return safeUser;
+  const { password, ...safe } = user;
+  return safe;
 };
 
-const authRequired = async (req, res, next) => {
+const authRequired = (req, res, next) => {
   const authHeader = req.headers.authorization || '';
-  if (!authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ message: 'Unauthorized.' });
-  }
+  if (!authHeader.startsWith('Bearer ')) return res.status(401).json({ message: 'Unauthorized.' });
 
-  const token = authHeader.replace('Bearer ', '');
-  const payload = verifyToken(token);
-  if (!payload) {
-    return res.status(401).json({ message: 'Invalid or expired token.' });
-  }
+  const payload = verifyToken(authHeader.slice(7));
+  if (!payload) return res.status(401).json({ message: 'Invalid or expired token.' });
 
-  const users = await getUsers();
-  const user = users.find((item) => item.id === payload.sub);
-  if (!user) {
-    return res.status(401).json({ message: 'User not found.' });
-  }
+  const user = dbService.findUserById(payload.sub);
+  if (!user) return res.status(401).json({ message: 'User not found.' });
 
   req.user = user;
   return next();
 };
 
 const adminRequired = (req, res, next) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ message: 'Admin access required.' });
-  }
-
+  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin access required.' });
   return next();
 };
 
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok' });
-});
+app.get('/api/health', (_req, res) => res.json({ status: 'ok', database: 'sqlite' }));
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', (req, res) => {
   const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ message: 'Email and password are required.' });
-  }
+  if (!email || !password) return res.status(400).json({ message: 'Email and password are required.' });
 
-  const users = await getUsers();
-  const user = users.find(
-    (item) => item.email.toLowerCase() === String(email).toLowerCase() && item.password === password
-  );
-
-  if (!user) {
-    return res.status(401).json({ message: 'Invalid credentials.' });
-  }
+  const user = dbService.findUserByCredentials(email, password);
+  if (!user) return res.status(401).json({ message: 'Invalid credentials.' });
 
   const now = Math.floor(Date.now() / 1000);
-  const token = signTokenPayload({
-    sub: user.id,
-    role: user.role,
-    companyId: user.companyId,
-    exp: now + tokenTtlSeconds
-  });
-
+  const token = signTokenPayload({ sub: user.id, role: user.role, companyId: user.companyId, exp: now + tokenTtlSeconds });
   return res.json({ token, user: sanitizeUser(user), expiresIn: tokenTtlSeconds });
 });
 
-app.get('/api/auth/me', authRequired, async (req, res) => {
-  return res.json(sanitizeUser(req.user));
+app.get('/api/auth/me', authRequired, (req, res) => res.json(sanitizeUser(req.user)));
+
+app.get('/api/users', authRequired, adminRequired, (req, res) => {
+  const users = dbService.listUsersByCompany(req.user.companyId).map(sanitizeUser);
+  res.json(users);
 });
 
-app.get('/api/users', authRequired, adminRequired, async (req, res) => {
-  const users = await getUsers();
-  const sameCompanyUsers = users
-    .filter((item) => item.companyId === req.user.companyId)
-    .map(sanitizeUser);
-  return res.json(sameCompanyUsers);
-});
-
-app.put('/api/users/:userId/department-access', authRequired, adminRequired, async (req, res) => {
-  const { userId } = req.params;
+app.put('/api/users/:userId/department-access', authRequired, adminRequired, (req, res) => {
   const { allowedDepartmentIds } = req.body;
-
   if (!Array.isArray(allowedDepartmentIds)) {
     return res.status(400).json({ message: 'allowedDepartmentIds must be an array.' });
   }
 
-  const users = await getUsers();
-  const targetUser = users.find((item) => item.id === userId && item.companyId === req.user.companyId);
-
-  if (!targetUser) {
-    return res.status(404).json({ message: 'User not found in your company.' });
-  }
-
-  targetUser.allowedDepartmentIds = [...new Set(allowedDepartmentIds)];
-  await saveUsers(users);
-  return res.json(sanitizeUser(targetUser));
+  const updated = dbService.updateUserDepartmentAccess(req.params.userId, req.user.companyId, [...new Set(allowedDepartmentIds)]);
+  if (!updated) return res.status(404).json({ message: 'User not found in your company.' });
+  return res.json(sanitizeUser(updated));
 });
 
 app.use('/api', authRequired);
 
-app.get('/api/activities', async (_req, res) => {
-  const activities = await getActivities();
-  res.json(activities);
+app.get('/api/activities', (_req, res) => res.json(dbService.getActivities()));
+app.post('/api/activities', (req, res) => {
+  const name = String(req.body.name || '').trim();
+  if (!name) return res.status(400).json({ message: 'Activity name is required.' });
+  return res.status(201).json(dbService.createActivity(name));
 });
 
-app.post('/api/activities', async (req, res) => {
-  const { name } = req.body;
-
-  if (!name || !String(name).trim()) {
-    return res.status(400).json({ message: 'Activity name is required.' });
-  }
-
-  const activities = await getActivities();
-  const newActivity = {
-    id: makeId('act'),
-    name: String(name).trim(),
-    subActivities: []
-  };
-
-  activities.push(newActivity);
-  await saveActivities(activities);
-  return res.status(201).json(newActivity);
+app.post('/api/activities/:activityId/sub-activities', (req, res) => {
+  const name = String(req.body.name || '').trim();
+  if (!name) return res.status(400).json({ message: 'Sub-activity name is required.' });
+  const created = dbService.createSubActivity(req.params.activityId, name);
+  if (!created) return res.status(404).json({ message: 'Activity not found.' });
+  return res.status(201).json(created);
 });
 
-app.post('/api/activities/:activityId/sub-activities', async (req, res) => {
-  const { activityId } = req.params;
-  const { name } = req.body;
-
-  if (!name || !String(name).trim()) {
-    return res.status(400).json({ message: 'Sub-activity name is required.' });
-  }
-
-  const activities = await getActivities();
-  const activity = activities.find((item) => item.id === activityId);
-
-  if (!activity) {
-    return res.status(404).json({ message: 'Activity not found.' });
-  }
-
-  const newSubActivity = {
-    id: makeId('sub'),
-    name: String(name).trim()
-  };
-
-  activity.subActivities.push(newSubActivity);
-  await saveActivities(activities);
-  return res.status(201).json(newSubActivity);
+app.put('/api/activities/:activityId', (req, res) => {
+  const name = String(req.body.name || '').trim();
+  if (!name) return res.status(400).json({ message: 'Activity name is required.' });
+  const updated = dbService.updateActivity(req.params.activityId, name);
+  if (!updated) return res.status(404).json({ message: 'Activity not found.' });
+  return res.json(updated);
 });
 
-app.put('/api/activities/:activityId', async (req, res) => {
-  const { activityId } = req.params;
-  const { name } = req.body;
-
-  if (!name || !String(name).trim()) {
-    return res.status(400).json({ message: 'Activity name is required.' });
-  }
-
-  const activities = await getActivities();
-  const activity = activities.find((item) => item.id === activityId);
-
-  if (!activity) {
-    return res.status(404).json({ message: 'Activity not found.' });
-  }
-
-  activity.name = String(name).trim();
-  await saveActivities(activities);
-  return res.json(activity);
+app.put('/api/activities/:activityId/sub-activities/:subActivityId', (req, res) => {
+  const name = String(req.body.name || '').trim();
+  if (!name) return res.status(400).json({ message: 'Sub-activity name is required.' });
+  const updated = dbService.updateSubActivity(req.params.activityId, req.params.subActivityId, name);
+  if (!updated) return res.status(404).json({ message: 'Sub-activity not found.' });
+  return res.json(updated);
 });
 
-app.put('/api/activities/:activityId/sub-activities/:subActivityId', async (req, res) => {
-  const { activityId, subActivityId } = req.params;
-  const { name } = req.body;
-
-  if (!name || !String(name).trim()) {
-    return res.status(400).json({ message: 'Sub-activity name is required.' });
-  }
-
-  const activities = await getActivities();
-  const activity = activities.find((item) => item.id === activityId);
-
-  if (!activity) {
-    return res.status(404).json({ message: 'Activity not found.' });
-  }
-
-  const subActivity = activity.subActivities.find((item) => item.id === subActivityId);
-
-  if (!subActivity) {
-    return res.status(404).json({ message: 'Sub-activity not found.' });
-  }
-
-  subActivity.name = String(name).trim();
-  await saveActivities(activities);
-  return res.json(subActivity);
-});
-
-app.get('/api/hazards', async (_req, res) => {
-  const hazards = await getHazards();
-  res.json(hazards);
-});
-
-app.post('/api/hazards', async (req, res) => {
-  const { name, description, consequences, existingControls, likelihood, severity } = req.body;
-
-  if (!name || !description || !consequences || !existingControls) {
+app.get('/api/hazards', (_req, res) => res.json(dbService.getHazards()));
+app.post('/api/hazards', (req, res) => {
+  const payload = req.body;
+  if (!payload.name || !payload.description || !payload.consequences || !payload.existingControls) {
     return res.status(400).json({ message: 'All hazard fields are required.' });
   }
-
-  const normalizedLikelihood = Number(likelihood);
-  const normalizedSeverity = Number(severity);
-  if (
-    Number.isNaN(normalizedLikelihood) ||
-    Number.isNaN(normalizedSeverity) ||
-    normalizedLikelihood < 1 ||
-    normalizedLikelihood > 5 ||
-    normalizedSeverity < 1 ||
-    normalizedSeverity > 5
-  ) {
-    return res.status(400).json({ message: 'Likelihood and severity must be between 1 and 5.' });
-  }
-
-  const hazards = await getHazards();
-  const newHazard = {
-    id: makeId('haz'),
-    name: String(name).trim(),
-    description: String(description).trim(),
-    consequences: String(consequences).trim(),
-    existingControls: String(existingControls).trim(),
-    likelihood: normalizedLikelihood,
-    severity: normalizedSeverity
-  };
-  hazards.push(newHazard);
-  await saveHazards(hazards);
-  return res.status(201).json(newHazard);
+  return res.status(201).json(dbService.createHazard({ ...payload, likelihood: Number(payload.likelihood), severity: Number(payload.severity) }));
+});
+app.put('/api/hazards/:hazardId', (req, res) => {
+  const payload = req.body;
+  const updated = dbService.updateHazard(req.params.hazardId, { ...payload, likelihood: Number(payload.likelihood), severity: Number(payload.severity) });
+  if (!updated) return res.status(404).json({ message: 'Hazard not found.' });
+  return res.json(updated);
 });
 
-app.put('/api/hazards/:hazardId', async (req, res) => {
-  const { hazardId } = req.params;
-  const { name, description, consequences, existingControls, likelihood, severity } = req.body;
-
-  if (!name || !description || !consequences || !existingControls) {
-    return res.status(400).json({ message: 'All hazard fields are required.' });
-  }
-
-  const normalizedLikelihood = Number(likelihood);
-  const normalizedSeverity = Number(severity);
-  if (
-    Number.isNaN(normalizedLikelihood) ||
-    Number.isNaN(normalizedSeverity) ||
-    normalizedLikelihood < 1 ||
-    normalizedLikelihood > 5 ||
-    normalizedSeverity < 1 ||
-    normalizedSeverity > 5
-  ) {
-    return res.status(400).json({ message: 'Likelihood and severity must be between 1 and 5.' });
-  }
-
-  const hazards = await getHazards();
-  const hazard = hazards.find((item) => item.id === hazardId);
-  if (!hazard) {
-    return res.status(404).json({ message: 'Hazard not found.' });
-  }
-
-  hazard.name = String(name).trim();
-  hazard.description = String(description).trim();
-  hazard.consequences = String(consequences).trim();
-  hazard.existingControls = String(existingControls).trim();
-  hazard.likelihood = normalizedLikelihood;
-  hazard.severity = normalizedSeverity;
-
-  await saveHazards(hazards);
-  return res.json(hazard);
+app.get('/api/mappings', (_req, res) => res.json(dbService.getMappings()));
+app.put('/api/mappings/:activityId/:subActivityId', (req, res) => {
+  const hazardIds = Array.isArray(req.body.hazardIds) ? [...new Set(req.body.hazardIds)] : null;
+  if (!hazardIds) return res.status(400).json({ message: 'hazardIds must be an array.' });
+  return res.json(dbService.replaceMappings(req.params.activityId, req.params.subActivityId, hazardIds));
 });
 
-app.get('/api/mappings', async (_req, res) => {
-  const mappings = await getMappings();
-  res.json(mappings);
-});
-
-app.put('/api/mappings/:activityId/:subActivityId', async (req, res) => {
-  const { activityId, subActivityId } = req.params;
-  const { hazardIds } = req.body;
-
-  if (!Array.isArray(hazardIds)) {
-    return res.status(400).json({ message: 'hazardIds must be an array.' });
-  }
-
-  const uniqueHazardIds = [...new Set(hazardIds)];
-
-  const [activities, hazards, mappings] = await Promise.all([
-    getActivities(),
-    getHazards(),
-    getMappings()
-  ]);
-
-  const activity = activities.find((item) => item.id === activityId);
-  const subActivity = activity?.subActivities.find((item) => item.id === subActivityId);
-  if (!activity || !subActivity) {
-    return res.status(404).json({ message: 'Activity or sub-activity not found.' });
-  }
-
-  const allValidHazards = uniqueHazardIds.every((hazardId) =>
-    hazards.some((hazard) => hazard.id === hazardId)
-  );
-
-  if (!allValidHazards) {
-    return res.status(400).json({ message: 'One or more hazardIds are invalid.' });
-  }
-
-  const remainingMappings = mappings.filter(
-    (item) => !(item.activityId === activityId && item.subActivityId === subActivityId)
-  );
-
-  const newMappings = uniqueHazardIds.map((hazardId) => ({
-    id: makeId('map'),
-    activityId,
-    subActivityId,
-    hazardId
-  }));
-
-  const updatedMappings = [...remainingMappings, ...newMappings];
-  await saveMappings(updatedMappings);
-  return res.json(newMappings);
-});
-
-app.get('/api/ra-template', async (req, res) => {
+app.get('/api/ra-template', (req, res) => {
   const { activityId, subActivityId } = req.query;
-
   if (!activityId || !subActivityId) {
     return res.status(400).json({ message: 'activityId and subActivityId are required.' });
   }
 
-  const [activities, hazards, mappings] = await Promise.all([
-    getActivities(),
-    getHazards(),
-    getMappings()
-  ]);
-
-  const activity = activities.find((item) => item.id === activityId);
-  const subActivity = activity?.subActivities.find((item) => item.id === subActivityId);
-
-  if (!activity || !subActivity) {
-    return res.status(404).json({ message: 'Activity or sub-activity not found.' });
-  }
-
-  const matchedMappings = mappings.filter(
-    (item) => item.activityId === activityId && item.subActivityId === subActivityId
-  );
-
-  const hazardsForRa = matchedMappings
-    .map((mapping) => {
-      const hazard = hazards.find((h) => h.id === mapping.hazardId);
-      if (!hazard) return null;
-
-      return {
-        mappingId: mapping.id,
-        hazardId: hazard.id,
-        hazardName: hazard.name,
-        hazardDescription: hazard.description,
-        consequences: hazard.consequences,
-        existingControls: hazard.existingControls,
-        additionalControls: '',
-        likelihood: Number(hazard.likelihood) || 1,
-        severity: Number(hazard.severity) || 1,
-        rpn: (Number(hazard.likelihood) || 1) * (Number(hazard.severity) || 1),
-        residualLikelihood: 1,
-        residualSeverity: 1,
-        residualRpn: 1
-      };
-    })
-    .filter(Boolean);
-
-  return res.json({
-    activity,
-    subActivity,
-    rows: hazardsForRa
-  });
+  const template = dbService.getRaTemplate(activityId, subActivityId);
+  if (!template) return res.status(404).json({ message: 'Activity or sub-activity not found.' });
+  return res.json(template);
 });
 
-app.get('/api/risk-assessments', async (req, res) => {
-  const assessments = await getRiskAssessments();
-  const visible = assessments.filter(
-    (item) =>
-      item.companyId === req.user.companyId && req.user.allowedDepartmentIds.includes(item.departmentId)
-  );
-
-  return res.json(visible);
+app.get('/api/risk-assessments', (req, res) => {
+  res.json(dbService.listRiskAssessmentsForUser(req.user));
 });
 
-app.post('/api/risk-assessments', async (req, res) => {
-  const { title, activityId, activityName, subActivities } = req.body;
-
+app.post('/api/risk-assessments', (req, res) => {
+  const { title, subActivities } = req.body;
   if (!title || !Array.isArray(subActivities) || subActivities.length === 0) {
     return res.status(400).json({ message: 'title and subActivities are required.' });
   }
 
-  const assessment = {
-    id: makeId('ra'),
-    companyId: req.user.companyId,
-    companyName: req.user.companyName,
-    departmentId: req.user.departmentId,
-    departmentName: req.user.departmentName,
-    createdBy: req.user.id,
-    createdByName: req.user.name,
-    createdAt: new Date().toISOString(),
-    title: String(title).trim(),
-    activityId,
-    activityName,
-    subActivities
-  };
-
-  const assessments = await getRiskAssessments();
-  assessments.push(assessment);
-  await saveRiskAssessments(assessments);
-
-  return res.status(201).json(assessment);
+  const created = dbService.createRiskAssessment(req.user, req.body);
+  return res.status(201).json(created);
 });
 
 app.use(express.static(frontendDist));
-app.get('*', (_req, res) => {
-  res.sendFile(path.join(frontendDist, 'index.html'));
-});
+app.get('*', (_req, res) => res.sendFile(path.join(frontendDist, 'index.html')));
 
 app.listen(port, () => {
-  console.log(`RA Generator API listening on port ${port}`);
+  console.log(`RA Generator API listening on port ${port} (SQLite backend)`);
 });
